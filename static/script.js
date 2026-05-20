@@ -1,181 +1,89 @@
-// To display predictions, this app has:
-// 1. A video that shows a feed from the user's webcam
-// 2. A canvas that appears over the video and shows predictions
-// When the page loads, a user is asked to give webcam permission.
-// After this happens, the model initializes and starts to make predictions
-// On the first prediction, an initialiation step happens in detectFrame()
-// to prepare the canvas on which predictions are displayed.
-
-var bounding_box_colors = {};
-
-var user_confidence = 0.6;
-
-// Update the colors in this list to set the bounding box colors
-var color_choices = [
-  "#C7FC00",
-  "#FF00FF",
-  "#8622FF",
-  "#FE0056",
-  "#00FFCE",
-  "#FF8000",
-  "#00B7EB",
-  "#FFFF00",
-  "#0E7AFE",
-  "#FFABAB",
-  "#0000FF",
-  "#CCCCCC",
-];
-
-var canvas_painted = false;
-var canvas = document.getElementById("video_canvas");
-var ctx = canvas.getContext("2d");
-
-const inferEngine = new inferencejs.InferenceEngine();
-var modelWorkerId = null;
-
-
-function detectFrame() {
-  // On first run, initialize a canvas
-  // On all runs, run inference using a video frame
-  // For each video frame, draw bounding boxes on the canvas
-  if (!modelWorkerId) return requestAnimationFrame(detectFrame);
-
-  inferEngine.infer(modelWorkerId, new inferencejs.CVImage(video)).then(function(predictions) {
-
-    if (!canvas_painted) {
-      var video_start = document.getElementById("video1");
-
-      canvas.top = video_start.top;
-      canvas.left = video_start.left;
-      canvas.style.top = video_start.top + "px";
-      canvas.style.left = video_start.left + "px";
-      canvas.style.position = "absolute";
-      video_start.style.display = "block";
-      canvas.style.display = "absolute";
-      canvas_painted = true;
-
-      var loading = document.getElementById("loading");
-      loading.style.display = "none";
-    }
-    requestAnimationFrame(detectFrame);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (video) {
-      drawBoundingBoxes(predictions, ctx)
-    }
-  });
+/* Применяем стили ко всему документу (html и body) */
+html, body {
+  height: 100%;          /* Высота на всю доступную область окна браузера */
+  width: 100%;           /* Ширина на всю доступную область окна браузера */
+  font-family: Arial, Helvetica, sans-serif;  /* Шрифт текста (Arial, если нет – Helvetica, иначе любой sans-serif) */
 }
 
-function drawBoundingBoxes(predictions, ctx) {
-  // For each prediction, choose or assign a bounding box color choice,
-  // then apply the requisite scaling so bounding boxes appear exactly
-  // around a prediction.
-
-  // If you want to do anything with predictions, start from this function.
-  // For example, you could display them on the web page, check off items on a list,
-  // or store predictions somewhere.
-
-  for (var i = 0; i < predictions.length; i++) {
-    var confidence = predictions[i].confidence;
-
-    console.log(user_confidence)
-
-    if (confidence < user_confidence) {
-      continue
-    }
-
-    if (predictions[i].class in bounding_box_colors) {
-      ctx.strokeStyle = bounding_box_colors[predictions[i].class];
-    } else {
-      var color =
-        color_choices[Math.floor(Math.random() * color_choices.length)];
-      ctx.strokeStyle = color;
-      // remove color from choices
-      color_choices.splice(color_choices.indexOf(color), 1);
-
-      bounding_box_colors[predictions[i].class] = color;
-    }
-
-    var prediction = predictions[i];
-    var x = prediction.bbox.x - prediction.bbox.width / 2;
-    var y = prediction.bbox.y - prediction.bbox.height / 2;
-    var width = prediction.bbox.width;
-    var height = prediction.bbox.height;
-
-    ctx.rect(x, y, width, height);
-
-    ctx.fillStyle = "rgba(0, 0, 0, 0)";
-    ctx.fill();
-
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.lineWidth = "4";
-    ctx.strokeRect(x, y, width, height);
-    ctx.font = "25px Arial";
-    ctx.fillText(prediction.class + " " + Math.round(confidence * 100) + "%", x, y - 10);
-  }
+/* Стили для абзацев и ссылок */
+p, a {
+  line-height: 1.5em;    /* Межстрочный интервал – полторы высоты шрифта (удобно для чтения) */
 }
 
-function webcamInference() {
-  // Ask for webcam permissions, then run main application.
-  var loading = document.getElementById("loading");
-  loading.style.display = "block";
-
-  navigator.mediaDevices
-    .getUserMedia({ video: { facingMode: "environment" } })
-    .then(function(stream) {
-      video = document.createElement("video");
-      video.srcObject = stream;
-      video.id = "video1";
-
-      // hide video until the web stream is ready
-      video.style.display = "none";
-      video.setAttribute("playsinline", "");
-
-      document.getElementById("video_canvas").after(video);
-
-      video.onloadedmetadata = function() {
-        video.play();
-      }
-
-      // on full load, set the video height and width
-      video.onplay = function() {
-        height = video.videoHeight;
-        width = video.videoWidth;
-
-        // scale down video by 0.75
-
-        video.width = width;
-        video.height = height;
-        video.style.width = 640 + "px";
-        video.style.height = 480 + "px";
-
-        canvas.style.width = 640 + "px";
-        canvas.style.height = 480 + "px";
-        canvas.width = width;
-        canvas.height = height;
-
-        document.getElementById("video_canvas").style.display = "block";
-      };
-
-      ctx.scale(1, 1);
-
-      // Load the Roboflow model using the publishable_key set in index.html
-      // and the model name and version set at the top of this file
-      inferEngine.startWorker(MODEL_NAME, MODEL_VERSION, publishable_key, [{ scoreThreshold: CONFIDENCE_THRESHOLD }])
-        .then((id) => {
-          modelWorkerId = id;
-          // Start inference
-          detectFrame();
-        });
-    })
-    .catch(function(err) {
-      console.log(err);
-    });
+/* Элемент с id="loading" (сообщение о загрузке) по умолчанию скрыт */
+#loading {
+  display: none;         /* Скрываем элемент – он будет показан позже через JavaScript, если нужно */
 }
 
-function changeConfidence () {
-  user_confidence = document.getElementById("confidence").value / 100;
+/* Блок настроек (ползунок) – отступы сверху и снизу */
+#settings {
+  margin-top: 30px;      /* Отступ сверху 30 пикселей */
+  margin-bottom: 30px;   /* Отступ снизу 30 пикселей */
 }
 
-document.getElementById("confidence").addEventListener("input", changeConfidence);
+/* Стили для заголовка h1 и всех ссылок a */
+h1, a {
+  color: #6706ce;        /* Фиолетовый цвет текста (#6706ce) */
+}
 
-webcamInference();
+/* Стиль для подписи (label) – нестандартно: задано font-weight: 50px, но font-weight обычно 100-900, 50px – ошибочное значение; скорее всего, хотели задать размер шрифта. Оставляем как есть */
+label {
+  font-weight: 50px;     /* Предположительно, имелось в виду font-size: 50px, но так тоже допустимо (но не имеет смысла) */
+}
+
+/* Убираем подчёркивание у ссылок */
+a {
+  text-decoration: none; /* Убираем стандартное подчёркивание ссылок */
+}
+
+/* Основной контейнер – главный блок с контентом */
+main {
+  width: 40em;           /* Ширина 40 единиц em (относительно размера шрифта) */
+  margin: auto;          /* Автоматические отступы слева и справа – центрирование по горизонтали */
+  text-align: center;    /* Выравнивание текста по центру */
+}
+
+/* Стиль для кнопок (ссылок, оформленных как кнопки) */
+.styled-button {
+  color: #fff;                  /* Белый цвет текста */
+  text-align: center;          /* Выравнивание текста по центру */
+  background-color: #6706ce;   /* Фиолетовый фон */
+  border: 1px solid #6706ce;   /* Граница того же фиолетового цвета, толщиной 1 пиксель */
+  border-radius: 4px;          /* Скругление углов – 4 пикселя */
+  padding: 13px 20px;          /* Внутренние отступы: сверху/снизу 13px, слева/справа 20px */
+  line-height: 1.5em;          /* Межстрочный интервал – полторы высоты шрифта */
+  text-decoration: none;       /* Убираем подчёркивание */
+  display: block;              /* Блочный элемент (занимает всю ширину родителя) */
+  margin: 10px;                /* Внешние отступы со всех сторон по 10px */
+  margin-bottom: 25px;         /* Дополнительный отступ снизу 25px (переопределяет общий margin-bottom) */
+  width: 100%;                 /* Ширина на 100% от родительского контейнера */
+}
+
+/* Альтернативный стиль для кнопки – бирюзовый фон, чёрный текст, без границы */
+.styled-button-turqouise {
+  border: none;                /* Убираем границу */
+  color: black;                /* Чёрный цвет текста */
+  background-color: #00ffce;   /* Бирюзовый фон */
+}
+
+/* Контейнер для виджета распознавания (canvas) */
+.infer-widget {
+  width: 480px;                /* Фиксированная ширина 480 пикселей */
+  margin: auto;                /* Центрирование по горизонтали */
+}
+
+/* Контейнер для ссылок (две кнопки в ряд) */
+.links {
+  display: flex;               /* Используем flexbox для гибкого расположения */
+  text-align: center;         /* Выравнивание текста по центру внутри каждого элемента */
+}
+
+/* Первая ссылка внутри .links (Build a Custom Model) */
+.links:first-child {
+  flex: 0 50%;                /* Не растягивается (flex-grow: 0), не сжимается (flex-shrink: 0), базовая ширина 50% */
+}
+
+/* Вторая ссылка внутри .links (Explore 50k+ Models) */
+.links:last-child {
+  flex: 1 50%;                /* Растягивается (flex-grow: 1), не сжимается (flex-shrink: 0), базовая ширина 50% */
+}
